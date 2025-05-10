@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Peta Kondisi Jalan</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+    #filter-kondisi {
+      position: absolute;
+      top: 50px;
+      right: 10px;
+      z-index: 1000;
+      padding: 5px;
+    }
+    h1 {
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+    <h1>Peta Kondisi Jalan Provinsi Sulawesi Selatan</h1>
+  <!-- Dropdown filter -->
+  <select id="filter-kondisi">
+    <option value="Semua">Tampilkan Semua</option>
+    <option value="Baik">Baik</option>
+    <option value="Sedang">Rusak Sedang</option>
+    <option value="Rusak Ringan">Rusak Ringan</option>
+    <option value="Rusak Berat">Rusak Berat</option>
+  </select>
+
+  <!-- Peta -->
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([-5.1, 119.5], 8);
+
+    // Basemap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let geojsonLayer;
+    let dataGeojson = null;
+
+    function tampilkanJalanDenganFilter(data, kondisiTerpilih) {
+      if (geojsonLayer) {
+        map.removeLayer(geojsonLayer);
+      }
+
+      geojsonLayer = L.geoJSON(data, {
+        filter: function (feature) {
+          if (kondisiTerpilih === "Semua") return true;
+          return feature.properties.kondisi === kondisiTerpilih;
+        },
+        style: function (feature) {
+          let warna = {
+            "Baik": "green",
+            "Sedang": "orange",
+            "Rusak Ringan": "yellow",
+            "Rusak Berat": "red"
+          };
+          return {
+            color: warna[feature.properties.kondisi] || "gray",
+            weight: 3
+          };
+        },
+        onEachFeature: function (feature, layer) {
+          let nama = feature.properties.Nm_Ruas || "Tanpa Nama";
+          let kondisi = feature.properties.kondisi || "Tidak diketahui";
+          layer.bindPopup(`<strong>${nama}</strong><br>Kondisi: ${kondisi}`);
+        }
+      });
+
+      geojsonLayer.addTo(map);
+    }
+
+    // Ambil dan proses GeoJSON
+    fetch('jalan-sulsel-rusak.geojson')
+      .then(res => res.json())
+      .then(data => {
+        // Tambahkan properti kondisi berdasarkan nilai tertinggi
+        data.features.forEach(function(feature) {
+          let nilai = {
+            "Baik": feature.properties.Kon_Baik || 0,
+            "Sedang": feature.properties.Kon_Sdg || 0,
+            "Rusak Ringan": feature.properties.Kon_Rgn || 0,
+            "Rusak Berat": feature.properties.Kon_Rusak || 0
+          };
+
+          let kondisiDominan = Object.keys(nilai).reduce((a, b) => nilai[a] > nilai[b] ? a : b);
+          feature.properties.kondisi = kondisiDominan;
+        });
+
+        dataGeojson = data;
+        tampilkanJalanDenganFilter(dataGeojson, "Semua");
+
+        document.getElementById("filter-kondisi").addEventListener("change", function () {
+          let kondisi = this.value;
+          tampilkanJalanDenganFilter(dataGeojson, kondisi);
+        });
+      });
+  </script>
+</body>
+</html>
